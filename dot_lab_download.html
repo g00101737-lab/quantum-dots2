@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dot Lab: tune a quantum dot</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--panel:rgba(9,15,24,.86);--line:#1b2a3a;--text:#d6e4f0;--dim:#8aa0b5;--c:#4dffb0;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;color:var(--text);font-family:'Sora','Segoe UI',system-ui,sans-serif;line-height:1.55;background:radial-gradient(ellipse at 15% 0,#13253d 0,transparent 55%),radial-gradient(ellipse at 95% 100%,#1b1236 0,transparent 50%),#03060b fixed}
+.wrap{max-width:1100px;margin:0 auto;padding:26px 16px 50px}
+h1{font-size:clamp(1.6rem,4.5vw,2.4rem);margin:0 0 6px;font-weight:600}
+.intro{max-width:66ch;color:var(--dim);margin:0 0 20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;min-width:0;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.panel h2{font-size:1rem;margin:0 0 4px;font-weight:600}.panel p{margin:0 0 8px;color:var(--dim);font-size:.85rem}
+.main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+.side{display:flex;flex-direction:column;gap:16px}
+@media(max-width:800px){.main{grid-template-columns:1fr}}
+canvas{display:block;width:100%;height:auto}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.row span{color:var(--c);font-size:1.25rem}
+input[type=range]{width:100%;margin:10px 0 2px;accent-color:var(--c);height:26px}
+.ends{display:flex;justify-content:space-between;color:var(--dim);font-size:.75rem;margin-bottom:10px}
+.btn{font:inherit;font-size:.88rem;color:var(--text);background:#0b141e;border:1px solid #35506a;border-radius:999px;padding:8px 18px;cursor:pointer}
+.btn.on{background:var(--c);color:#03060b;border-color:var(--c)}.btn:focus-visible,.v:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.stat{background:#060c13;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.stat small{display:block;color:var(--dim);font-size:.72rem}.stat strong{font-size:1.05rem;font-weight:600}
+.rack{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px}
+.v{background:none;border:0;color:var(--dim);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;font:inherit;font-size:.7rem;padding:2px}
+.v i{width:26px;height:56px;border-radius:5px 5px 13px 13px;border:1.5px solid #4a6a86;display:block;transition:box-shadow .3s}
+.v.sel{color:#fff}.v.sel i{border-color:#fff}
+.game{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.sw{width:74px;height:74px;border-radius:14px;border:1px solid var(--line)}
+.sws{display:flex;gap:12px;text-align:center;font-size:.72rem;color:var(--dim)}
+.msg{flex:1;min-width:220px;font-size:.92rem}.msg b{color:var(--c)}
+.zoom{margin-top:16px}#cap{min-height:3em;color:var(--text)!important;font-size:.92rem!important}
+.note{color:var(--dim);font-size:.78rem;margin-top:14px;max-width:95ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Dot Lab</h1>
+<p class="intro">Cadmium selenide dots are tiny crystals that glow when hit with UV light. Their size alone decides the color. Tune the flask, break the batch into a mess, zap a single dot, then try to match a target color.</p>
+
+<div class="main">
+ <section class="panel">
+  <canvas id="vial" width="480" height="520" role="img" aria-label="A flask of glowing quantum dots"></canvas>
+  <div class="rack" id="rack"></div>
+ </section>
+ <div class="side">
+  <section class="panel">
+   <div class="row"><b>Average dot radius</b><span id="rv"></span></div>
+   <input type="range" id="sl" min="1" max="4" step="0.02" value="1.6" aria-label="Average radius in nanometres">
+   <div class="ends"><span>1 nm: tiny</span><span>4 nm: large</span></div>
+   <div class="row"><b>Size spread in the batch</b><span id="sv"></span></div>
+   <input type="range" id="sg" min="2" max="20" step="1" value="6" aria-label="Size spread percent">
+   <div class="ends"><span>very uniform</span><span>messy batch</span></div>
+   <button class="btn on" id="uv" aria-pressed="true">UV lamp: on</button>
+   <div class="stats"><div class="stat"><small>Diameter</small><strong id="sD"></strong></div><div class="stat"><small>Emission</small><strong id="sL"></strong></div><div class="stat"><small>Band gap</small><strong id="sE"></strong></div></div>
+  </section>
+  <section class="panel">
+   <h2>Light coming out of the flask</h2>
+   <p>Every dot in the flask has a slightly different size, so its color differs a little. A messy batch gives a wide, washed-out spectrum.</p>
+   <canvas id="sp" width="440" height="160" role="img" aria-label="Emission spectrum of the flask"></canvas>
+  </section>
+ </div>
+</div>
+
+<section class="panel zoom">
+ <h2>Zoom into one dot</h2>
+ <p>Press the button and follow one electron through the dot's energy levels. The cloud shows where the electron is likely to be found.</p>
+ <button class="btn" id="zap">Zap it with UV</button>
+ <p id="cap">Press "Zap it with UV" to start.</p>
+ <canvas id="zm" width="900" height="300" role="img" aria-label="Energy level animation for one quantum dot"></canvas>
+</section>
+
+<section class="panel game">
+ <div class="sws"><div><div class="sw" id="wT"></div>target</div><div><div class="sw" id="wY"></div>your dots</div></div>
+ <div class="msg"><h2>Match the color</h2><div id="gm"></div></div>
+ <div><button class="btn" id="nx">New target</button><p style="margin:8px 0 0">Streak: <b id="st">0</b></p></div>
+</section>
+
+<p class="note">Sizes and colors follow the experimental CdSe sizing curve of Yu et al., Chem. Mater. 15, 2854 (2003), fitted for about 2 to 8 nm diameters. The curve is measured at the first absorption peak, and real emission sits a little redder. The energy levels are schematic: spacing is scaled to the band gap, and the wavefunctions are the lowest s-states of a spherical well, ψ ∝ sin(nπr/R)/r. Wavelength-to-color conversion approximates human vision.</p>
+</div>
+
+<script>
+const PI=Math.PI,$=id=>document.getElementById(id);
+const yu=l=>1.6122e-9*l**4-2.6575e-6*l**3+1.6242e-3*l**2-.4277*l+41.57;
+function lamE(R){let a=430,b=720,D=2*R;for(let i=0;i<30;i++){const m=(a+b)/2;yu(m)<D?a=m:b=m}return(a+b)/2}
+function rgb(w){w=Math.max(w,405);let r=0,g=0,b=0;
+ if(w<440){r=-(w-440)/60;b=1}else if(w<490){g=(w-440)/50;b=1}else if(w<510){g=1;b=-(w-510)/20}
+ else if(w<580){r=(w-510)/70;g=1}else if(w<645){r=1;g=-(w-645)/65}else r=1;
+ const f=w>700?.3+.7*(780-w)/80:w<420?.3+.7*(w-380)/40:1;
+ return[r,g,b].map(c=>Math.round(255*Math.pow(Math.max(c*f,0),.8)))}
+const rc=w=>rgb(w).join(','),col=w=>'rgb('+rc(w)+')';
+const cname=w=>w<450?'Violet-blue':w<495?'Blue':w<520?'Cyan-green':w<565?'Green':w<590?'Yellow':w<625?'Orange':'Red';
+const dpr=Math.min(window.devicePixelRatio||1,2),slow=matchMedia('(prefers-reduced-motion:reduce)').matches?.3:1;
+function ctxOf(id,w,h){const c=$(id);c.width=w*dpr;c.height=h*dpr;const g=c.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);return g}
+const gV=ctxOf('vial',480,520),gS=ctxOf('sp',440,160),gZ=ctxOf('zm',900,300);
+let R=1.6,sig=.06,uv=true,target=0,solved=false,streak=0,zap=-1,capTxt='';
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*PI*v)}
+const P=[],F=[];
+for(let i=0;i<240;i++)P.push({x:150+Math.random()*180,y:215+Math.random()*235,vx:0,vy:0,g:gauss(),ph:Math.random()*6.3});
+const rack=$('rack'),PRE=[1,1.3,1.6,2,2.5,3.1,3.9];
+PRE.forEach(r=>{const b=document.createElement('button');b.className='v';b.setAttribute('aria-label','Set radius '+r+' nm');
+ b.innerHTML='<i></i>'+(2*r).toFixed(1)+' nm';b.onclick=()=>{$('sl').value=r;update()};rack.appendChild(b)});
+
+function drawVial(t){
+ const g=gV,mc=rc(lamE(R));g.clearRect(0,0,480,520);
+ if(uv){const b=g.createLinearGradient(46,0,140,0);b.addColorStop(0,'rgba(150,100,255,.42)');b.addColorStop(1,'rgba(150,100,255,0)');
+  g.fillStyle=b;g.beginPath();g.moveTo(46,255);g.lineTo(46,291);g.lineTo(140,470);g.lineTo(140,135);g.fill()}
+ g.fillStyle='#241a45';g.strokeStyle=uv?'#9d80ff':'#4a4a66';g.lineWidth=2;g.fillRect(6,250,40,46);g.strokeRect(6,250,40,46);
+ g.fillStyle='#cbb8ff';g.font='12px Sora,sans-serif';g.fillText('UV',18,278);
+ g.save();g.beginPath();g.roundRect(130,130,220,340,42);g.clip();
+ g.fillStyle=uv?`rgba(${mc},.13)`:'rgba(120,150,180,.06)';g.fillRect(100,195,300,300);g.restore();
+ if(uv){g.save();g.shadowColor=`rgba(${mc},.7)`;g.shadowBlur=60;g.fillStyle=`rgba(${mc},.05)`;g.beginPath();g.roundRect(130,195,220,275,42);g.fill();g.restore()}
+ P.forEach(p=>{p.vx=(p.vx+(Math.random()-.5)*.2)*.96;p.vy=(p.vy+(Math.random()-.5)*.2)*.96;
+  p.x+=p.vx*slow;p.y+=p.vy*slow;if(p.x<148||p.x>332)p.vx*=-1;if(p.y<212||p.y>452)p.vy*=-1});
+ g.globalCompositeOperation='lighter';
+ P.forEach(p=>{const a=uv?.8+.2*Math.sin(t/300+p.ph):.1,s=1.6+p.r*.9;
+  g.fillStyle=`rgba(${p.c},${a*.14})`;g.beginPath();g.arc(p.x,p.y,s*3.4,0,7);g.fill();
+  g.fillStyle=`rgba(${p.c},${a})`;g.beginPath();g.arc(p.x,p.y,s,0,7);g.fill()});
+ if(uv){if(Math.random()<.5&&F.length<40){const p=P[Math.random()*P.length|0];F.push({x:p.x,y:p.y,t:0,c:p.c})}
+  for(let i=F.length-1;i>=0;i--){const f=F[i];f.t+=.03*slow;if(f.t>1){F.splice(i,1);continue}
+   g.strokeStyle=`rgba(${f.c},${(1-f.t)*.7})`;g.lineWidth=1.5;g.beginPath();g.arc(f.x,f.y,4+f.t*28,0,7);g.stroke()}}
+ g.globalCompositeOperation='source-over';
+ g.strokeStyle='rgba(190,215,240,.45)';g.lineWidth=2.5;g.beginPath();g.roundRect(130,130,220,340,42);g.stroke();
+ g.beginPath();g.moveTo(195,132);g.lineTo(195,52);g.moveTo(285,132);g.lineTo(285,52);g.stroke();
+ g.fillStyle='#1b2a3a';g.fillRect(186,28,108,26);g.strokeRect(186,28,108,26);
+ g.strokeStyle='rgba(255,255,255,.18)';g.beginPath();g.moveTo(150,180);g.lineTo(150,400);g.stroke();
+ if(!uv){g.fillStyle='#8aa0b5';g.font='13px Sora,sans-serif';g.textAlign='center';g.fillText('Lamp off: the dots are almost invisible',240,505);g.textAlign='left'}
+}
+
+function drawSpec(){
+ const g=gS,B=[],n=36,lo=440,w=8;for(let i=0;i<n;i++)B.push(0);
+ P.forEach(p=>{const i=Math.floor((p.l-lo)/w);if(i>=0&&i<n)B[i]++});
+ const mx=Math.max(...B,1);g.clearRect(0,0,440,160);
+ g.strokeStyle='#1b2a3a';g.fillStyle='#8aa0b5';g.font='11px Sora,sans-serif';g.textAlign='center';
+ for(let l=450;l<=700;l+=50){const x=20+(l-lo)/(n*w)*400;g.beginPath();g.moveTo(x,10);g.lineTo(x,125);g.stroke();g.fillText(l,x,142)}
+ g.fillText('wavelength (nm)',220,158);g.textAlign='left';
+ B.forEach((c,i)=>{const h=c/mx*105,x=20+i*400/n,cl=rc(lo+i*w+w/2);
+  g.save();g.shadowColor=`rgb(${cl})`;g.shadowBlur=10;g.fillStyle=`rgb(${cl})`;g.fillRect(x+1,125-h,400/n-2,h);g.restore()});
+}
+
+const ease=x=>x<.5?2*x*x:1-2*(1-x)**2,lerp=(a,b,x)=>a+(b-a)*x;
+function wave(g,x0,x1,y,c,ph){g.strokeStyle=c;g.lineWidth=2.5;g.beginPath();
+ for(let x=x0;x<=x1;x+=3){const e=Math.sin(PI*(x-x0)/(x1-x0||1)),yy=y+Math.sin(x/5-ph)*10*e;x==x0?g.moveTo(x,yy):g.lineTo(x,yy)}g.stroke()}
+function drawZoom(t){
+ const g=gZ,Eg=1239.84/lamE(R),k=1/.13+1/.45,tot=Eg-1.74,c1=tot/.13/k,v1=tot/.45/k,cc=rc(lamE(R));
+ const e1=1.74+c1,e2=1.74+4*c1,h1=-v1,top=e2+.7,bot=-v1-.7,Y=e=>28+(top-e)/(top-bot)*244;
+ const tt=zap<0?-1:(t-zap)/1000;if(tt>5.4)zap=-1;
+ g.clearRect(0,0,900,300);
+ const dr=38+R*24,cx=160,cy=150;
+ g.fillStyle=`rgba(${cc},.18)`;g.strokeStyle=`rgb(${cc})`;g.lineWidth=3;g.beginPath();g.arc(cx,cy,dr,0,7);g.fill();g.stroke();
+ let n=0,ey=Y(h1),ex=690,cap='Press "Zap it with UV" to start.';
+ if(tt>=0){
+  if(tt<.9)cap='1. A UV photon carries more energy than the band gap.';
+  else if(tt<1.6){cap='2. The dot absorbs it and lifts an electron into a high level, leaving a hole behind.';ey=lerp(Y(h1),Y(e2),ease((tt-.9)/.7));n=2}
+  else if(tt<2.4){cap='3. The electron sheds a little energy as heat and drops to the lowest level.';ey=lerp(Y(e2),Y(e1),ease((tt-1.6)/.8));ex=690+Math.sin(tt*30)*4;n=tt<2?2:1}
+  else if(tt<3.2){cap='4. It rests in the lowest level, right next to the hole.';ey=Y(e1);n=1}
+  else{cap=`5. It falls into the hole and releases the leftover energy as a ${Math.round(lamE(R))} nm photon.`;ey=tt<3.5?lerp(Y(e1),Y(h1),ease((tt-3.2)/.3)):Y(h1)}
+  if(tt>=5)cap='Done. Press the button to zap again.'}
+ if(n){const gr=g.createRadialGradient(cx,cy,0,cx,cy,dr);
+  for(let i=0;i<=16;i++){const x=i/16,s=x<1e-3?1:Math.sin(n*PI*x)/(n*PI*x);gr.addColorStop(x,`rgba(${cc},${Math.min(1,s*s*1.1)})`)}
+  g.fillStyle=gr;g.beginPath();g.arc(cx,cy,dr-2,0,7);g.fill()}
+ if(cap!==capTxt){capTxt=cap;$('cap').textContent=cap}
+ g.fillStyle='rgba(120,160,200,.07)';g.fillRect(430,28,440,Y(1.74)-28);g.fillRect(430,Y(0),440,272-Y(0)+28);
+ g.strokeStyle='#4a6a86';g.setLineDash([5,5]);g.lineWidth=1;g.beginPath();g.moveTo(430,Y(1.74));g.lineTo(870,Y(1.74));g.moveTo(430,Y(0));g.lineTo(870,Y(0));g.stroke();g.setLineDash([]);
+ g.fillStyle='#8aa0b5';g.font='12px Sora,sans-serif';g.fillText('conduction band edge (bulk)',440,Y(1.74)-6);g.fillText('valence band edge (bulk)',440,Y(0)+16);
+ [[e2,'electron level 2'],[e1,'electron level 1'],[h1,'hole level']].forEach(([e,l])=>{
+  g.strokeStyle=`rgb(${cc})`;g.lineWidth=3;g.beginPath();g.moveTo(600,Y(e));g.lineTo(780,Y(e));g.stroke();g.fillStyle='#d6e4f0';g.fillText(l,790,Y(e)+4)});
+ g.fillStyle='#d6e4f0';g.font='13px Sora,sans-serif';g.fillText('energy ↑',440,20);
+ if(tt>=0&&tt<.9){const x=lerp(360,690,tt/.9);wave(g,Math.max(360,x-110),x,Y(h1),'#a684ff',t/40)}
+ if(tt>=3.2){const x=lerp(700,890,Math.min(1,(tt-3.2)/1.6)),ym=(Y(e1)+Y(h1))/2;wave(g,Math.max(700,x-110),x,ym,`rgb(${cc})`,-t/40)}
+ g.save();g.shadowColor=`rgb(${cc})`;g.shadowBlur=tt>=0?16:0;g.fillStyle=tt>=0?'#fff':'#7f95aa';
+ if(!(tt>=3.5))g.beginPath(),g.arc(ex,ey,8,0,7),g.fill();g.restore();
+ if(tt>=.9&&tt<3.5)g.strokeStyle='#fff',g.lineWidth=2,g.beginPath(),g.arc(650,Y(h1),8,0,7),g.stroke();
+ if(tt>=1.6&&tt<2.4){g.fillStyle='#ffb36b';g.fillText('heat',ex+16,ey)}
+}
+function loop(t){drawVial(t);drawZoom(t);requestAnimationFrame(loop)}
+
+function newTarget(){let w;do{w=Math.round((470+Math.random()*180)/5)*5}while(Math.abs(w-lamE(R))<40);target=w;solved=false;update()}
+function update(){
+ R=+$('sl').value;sig=$('sg').value/100;const w=lamE(R),c=col(w);
+ document.documentElement.style.setProperty('--c',c);
+ $('rv').textContent=R.toFixed(2)+' nm';$('sv').textContent='±'+Math.round(sig*100)+'%';
+ $('sD').textContent=(2*R).toFixed(1)+' nm';$('sL').textContent=Math.round(w)+' nm';$('sE').textContent=(1239.84/w).toFixed(2)+' eV';
+ P.forEach(p=>{p.r=Math.min(4,Math.max(1,R*(1+sig*p.g)));p.l=lamE(p.r);p.c=rc(p.l)});
+ [...rack.children].forEach((b,i)=>{const cl=col(lamE(PRE[i]));b.firstChild.style.background=`linear-gradient(#0b141e 22%,${cl} 22%)`;
+  b.firstChild.style.boxShadow=uv?`0 0 16px ${cl}`:'none';b.firstChild.style.filter=uv?'none':'brightness(.25)';b.classList.toggle('sel',Math.abs(PRE[i]-R)<.13)});
+ $('uv').textContent='UV lamp: '+(uv?'on':'off');$('uv').classList.toggle('on',uv);$('uv').setAttribute('aria-pressed',uv);
+ drawSpec();
+ $('wT').style.background=col(target);$('wY').style.background=c;$('wT').style.boxShadow=`0 0 18px ${col(target)}`;$('wY').style.boxShadow=`0 0 18px ${c}`;
+ const d=w-target;
+ if(Math.abs(d)<=6){if(!solved){solved=true;streak++}$('gm').innerHTML=`<b>Matched!</b> A ${Math.round(target)} nm glow needs dots about ${(2*R).toFixed(1)} nm across.`}
+ else $('gm').innerHTML=`Target: <b>${Math.round(target)} nm</b> (${cname(target).toLowerCase()}). Yours is ${Math.round(w)} nm, ${d<0?'too blue, so grow the dots':'too red, so shrink the dots'}.`;
+ $('st').textContent=streak;
+}
+$('sl').oninput=$('sg').oninput=update;
+$('uv').onclick=()=>{uv=!uv;update()};
+$('zap').onclick=()=>{zap=performance.now()};
+$('nx').onclick=()=>{if(!solved)streak=0;newTarget()};
+newTarget();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
